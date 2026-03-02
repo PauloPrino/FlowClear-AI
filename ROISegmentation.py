@@ -4,6 +4,7 @@ import tempfile
 import numpy as np
 import nibabel as nib
 from pathlib import Path
+import sys
 
 # Import MRSegmentator inference module
 from mrsegmentator import inference
@@ -20,6 +21,10 @@ MRSEG_CLASSES = {
     # Add other classes from the documentation if needed
 }
 
+class DummyFile:
+    def write(self, x): pass
+    def flush(self): pass
+
 def segment_4d_with_mrsegmentator(nifti_path, output_dir, rois=["aorta"], fast=True, device='cuda'):
     """
     Segments a 4D NIfTI file using MRSegmentator by processing each time frame.
@@ -34,6 +39,11 @@ def segment_4d_with_mrsegmentator(nifti_path, output_dir, rois=["aorta"], fast=T
     Returns:
         dict: Paths to the generated 4D mask files for each ROI.
     """
+    
+    # Fix for PyInstaller --windowed mode where sys.stdout/stderr are None
+    # This prevents 'NoneType' object has no attribute 'write' errors in external libs (tqdm, etc.)
+    if sys.stdout is None: sys.stdout = DummyFile()
+    if sys.stderr is None: sys.stderr = DummyFile()
     
     # 1. Setup paths and load data
     file_name = os.path.basename(nifti_path).replace(".nii.gz", "")

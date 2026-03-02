@@ -3,6 +3,7 @@ import json
 import pydicom
 import os
 import shutil
+import sys
 
 class DicomConverter:
     def __init__(self):
@@ -15,15 +16,29 @@ class DicomConverter:
         os.makedirs(output_folder, exist_ok=True)
         
         # Check for dcm2niix
-        if shutil.which("dcm2niix") is None:
-            print("Error: dcm2niix not found in PATH.")
+        # Check for dcm2niix in PATH or current directory (for portable app)
+        dcm2niix_cmd = "dcm2niix"
+        
+        # Priority 1: Check if bundled with PyInstaller
+        if hasattr(sys, '_MEIPASS'):
+            bundled_exe = os.path.join(sys._MEIPASS, "dcm2niix.exe")
+            if os.path.exists(bundled_exe):
+                dcm2niix_cmd = bundled_exe
+        
+        # Priority 2: Check local directory (useful for development/portable)
+        elif os.path.exists(os.path.join(os.getcwd(), "dcm2niix.exe")):
+            dcm2niix_cmd = os.path.join(os.getcwd(), "dcm2niix.exe")
+            
+        # Priority 3: Check System PATH
+        elif shutil.which("dcm2niix") is None:
+            print("Error: dcm2niix not found in PATH, local folder, or bundle.")
             return False
 
         # Output filename pattern
         patient_name = os.path.basename(os.path.normpath(input_folder))
         
         command = [
-            "dcm2niix",
+            dcm2niix_cmd,
             "-o", output_dir_path(output_folder),
             "-f", f"{patient_name}_%p_%s", # Patient_Protocol_Series
             "-z", "y", # compress

@@ -66,6 +66,14 @@ class InferenceWorker(QThread):
         self.venc_ratio = venc_ratio
         self.threshold = threshold
         self.start_time = 0
+        self._is_running = True
+        self.executor = None
+
+    def stop(self):
+        """Signals the worker to stop processing."""
+        self._is_running = False
+        if self.executor:
+            self.executor.shutdown(wait=False, cancel_futures=True)
 
     def run(self):
         try:
@@ -95,6 +103,7 @@ class InferenceWorker(QThread):
             # --- 1.5 AUTOMATIC DICOM CONVERSION ---
             if os.path.isdir(self.input_path):
                 # Check if folder contains NIfTI files
+                if not self._is_running: return
                 has_nifti = any(f.endswith('.nii.gz') or f.endswith('.nii') for f in os.listdir(self.input_path))
                 if not has_nifti:
                     self.task_update.emit("Detected DICOM. Converting...")
@@ -117,6 +126,7 @@ class InferenceWorker(QThread):
             # --- 3. MODEL LOADING (Only for AI) ---
             model = None
             ensemble_models = []
+            if not self._is_running: return
             
             if not is_classic:
                 if is_ensemble:
@@ -138,6 +148,7 @@ class InferenceWorker(QThread):
             # --- 4. SEGMENTATION (Optional) ---
             roi_mask_data = None
             if self.do_segmentation:
+                if not self._is_running: return
                 self.task_update.emit("Running Segmentation (MRSegmentator)...")
                 mag_path = P.find_magnitude_file(file_list[0])
                 if mag_path:
@@ -153,11 +164,12 @@ class InferenceWorker(QThread):
             last_unwrap = ""
             
             # Executor for AI Slice Unwrapping (Not used for Classic which processes volumes)
-            executor = ThreadPoolExecutor(max_workers=4) 
+            self.executor = ThreadPoolExecutor(max_workers=4) 
             futures = []
 
             # --- 5. MAIN PROCESSING LOOP ---
             for i, fpath in enumerate(file_list):
+                if not self._is_running: break
                 fname = Path(fpath).name
                 self.progress_log.emit(f"Processing ({i+1}/{total_files}): {fname}")
                 self.task_update.emit(f"Processing file {i+1}/{total_files}")
@@ -193,6 +205,7 @@ class InferenceWorker(QThread):
                         raise ValueError(f"You selected {algo_mode} but the input file is 3D. Please select a 3D mode.")
                     
                     self.task_update.emit(f"Running {algo_mode}...")
+                    if not self._is_running: break
                     
                     # 1. Normalize Data to [-pi, pi] for unwrapFlow
                     # Assuming 12-bit signed range or similar. P.predict uses 4096.0
@@ -256,6 +269,7 @@ class InferenceWorker(QThread):
                         if is_temporal_model: # Iterate Slices
                             self.progress_log.emit(f"Mode: 2D+T (Iterating over {Z} slices)")
                             for z in range(Z):
+                                if not self._is_running: break
                                 self.task_update.emit(f"File {i+1}/{total_files} | Processing Slice {z+1}/{Z}")
                                 slice_time_data = data[:, :, z, :]
                                 
@@ -272,13 +286,14 @@ class InferenceWorker(QThread):
                                     mask_t = P.predict_volume_batches(model, input_t, device, threshold=self.threshold)
                                 
                                 full_mask[:, :, z, :] = mask_t
-                                f = executor.submit(P.unwrap_slice_inplace, slice_time_data, mask_t, full_unwrapped[:, :, z, :], self.venc, current_venc_ratio)
+                                f = self.executor.submit(P.unwrap_slice_inplace, slice_time_data, mask_t, full_unwrapped[:, :, z, :], self.venc, current_venc_ratio)
                                 futures.append(f)
                                 self._update_progress(i + (z + 1) / Z, total_files)
                                 
                         else: # Iterate Time Frames (Standard 2D or 3D models)
                             self.progress_log.emit(f"Mode: Standard (Iterating over {T} time frames)")
                             for t in range(T):
+                                if not self._is_running: break
                                 self.task_update.emit(f"File {i+1}/{total_files} | Processing Frame {t+1}/{T}")
                                 vol_t = data[..., t]
                                 input_t = vol_t * (roi_for_file[..., t] if roi_for_file is not None else 1)
@@ -291,7 +306,7 @@ class InferenceWorker(QThread):
                                     mask_t = P.predict_volume_batches(model, input_t, device, threshold=self.threshold)
                                 
                                 full_mask[..., t] = mask_t
-                                f = executor.submit(P.unwrap_slice_inplace, vol_t, mask_t, full_unwrapped[..., t], self.venc, current_venc_ratio)
+                                f = self.executor.submit(P.unwrap_slice_inplace, vol_t, mask_t, full_unwrapped[..., t], self.venc, current_venc_ratio)
                                 futures.append(f)
                                 self._update_progress(i + (t + 1) / T, total_files)
 
@@ -312,10 +327,14 @@ class InferenceWorker(QThread):
                         P.unwrap_slice_inplace(data, mask_t, full_unwrapped, self.venc, current_venc_ratio)
                         self._update_progress(i + 1, total_files)
 
-                    for f in futures: f.result()
+                    for f in futures: 
+                        if not self._is_running: break
+                        f.result()
                     futures.clear()
 
                 # --- SAVE RESULTS ---
+                if not self._is_running: break
+
                 aliased_count = np.sum(full_mask)
                 self.progress_log.emit(f"--> DETECTED {aliased_count} ALIASED PIXELS")
 
@@ -336,7 +355,11 @@ class InferenceWorker(QThread):
                 last_mask = mask_path
                 self.progress_log.emit(f"Saved to: Outputs/{Path(mask_path).name}")
 
-            executor.shutdown()
+            if self.executor:
+                self.executor.shutdown(wait=False)
+            
+            if not self._is_running: return
+
             self.progress_bar.emit(100)
             self.task_update.emit("Finished")
             self.eta_update.emit("Processing Complete")
@@ -654,6 +677,12 @@ class PredictionWidget(QWidget):
         self.run_btn.setStyleSheet("QPushButton { background-color: #28a745; color: white; border-radius: 25px; font-weight: bold; font-size: 14px; } QPushButton:disabled { background-color: #ddd; color: #888; }")
         self.run_btn.clicked.connect(self.run_inference)
 
+        self.cancel_btn = QPushButton("⏹ Cancel")
+        self.cancel_btn.setFixedSize(220, 50)
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setStyleSheet("QPushButton { background-color: #d9534f; color: white; border-radius: 25px; font-weight: bold; font-size: 14px; } QPushButton:disabled { background-color: #ddd; color: #888; }")
+        self.cancel_btn.clicked.connect(self.cancel_inference)
+
         method_layout = QHBoxLayout()
         method_layout.setAlignment(Qt.AlignCenter)
         method_layout.addWidget(QLabel("Select Method:"))
@@ -667,6 +696,8 @@ class PredictionWidget(QWidget):
         ctrl_layout.addLayout(seg_layout)
         ctrl_layout.addSpacing(10)
         ctrl_layout.addWidget(self.run_btn)
+        ctrl_layout.addSpacing(5)
+        ctrl_layout.addWidget(self.cancel_btn)
         ctrl_layout.addSpacing(5)
         ctrl_layout.addWidget(self.progress_bar)
         ctrl_layout.addWidget(self.eta_label)
@@ -771,6 +802,7 @@ class PredictionWidget(QWidget):
 
         self.run_btn.setEnabled(False)
         self.run_btn.setText("Running...")
+        self.cancel_btn.setEnabled(True)
         self.task_label.setText("Starting...")
         
         # Construct Model Config
@@ -810,6 +842,7 @@ class PredictionWidget(QWidget):
     def on_finished(self, res1, res2):
         self.run_btn.setEnabled(True)
         self.run_btn.setText("▶ Run Prediction")
+        self.cancel_btn.setEnabled(False)
         self.progress_bar.setValue(100)
         self.task_label.setText("Done")
         if res1 == "BATCH_COMPLETE":
@@ -822,12 +855,28 @@ class PredictionWidget(QWidget):
             self.last_mask_path = res1
             self.btn_manual_label.setEnabled(True)
 
+    def cancel_inference(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.stop()
+            self.log_area.append("Cancellation requested by user.")
+            self.task_label.setText("Cancelled")
+            self.eta_label.setText("Estimated time: --")
+            self.progress_bar.setValue(0)
+            self.run_btn.setEnabled(True)
+            self.run_btn.setText("▶ Run Prediction")
+            self.cancel_btn.setEnabled(False)
+
     def emit_manual_labeling(self):
         unwrap_path = ""
         if self.box_unwrap.file_path:
             unwrap_path = self.box_unwrap.file_path
         if hasattr(self, 'last_mask_path') and self.current_input:
             self.request_manual_labeling.emit(self.current_input, self.last_mask_path, unwrap_path)
+
+    def stop_worker(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.stop()
+            self.worker.wait()
 
 class VisualisationWidget(QWidget):
     def __init__(self):
@@ -1608,6 +1657,15 @@ class MainWindow(QMainWindow):
     def load_and_switch_to_labeling(self, orig_path, mask_path, unwrap_path):
         self.switch_view(2, "Hand Labeling")
         self.page_labeling.load_data(orig_path, mask_path, unwrap_path)
+
+    def closeEvent(self, event):
+        # Stop prediction worker
+        self.page_predict.stop_worker()
+        # Stop converter worker if running (terminate is harsh but ensures app closes)
+        if hasattr(self.page_converter, 'worker') and self.page_converter.worker.isRunning():
+            self.page_converter.worker.terminate()
+            self.page_converter.worker.wait()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

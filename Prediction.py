@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import json
 from pathlib import Path
@@ -200,8 +201,12 @@ def load_model(model_key, device, log_callback=None):
     if model_key not in MODEL_REGISTRY: raise ValueError(f"Model {model_key} not found.")
     entry = MODEL_REGISTRY[model_key]
 
-    script_dir = Path(__file__).parent
-    weights_path = script_dir / entry["weights"]
+    # Handle paths for frozen app (PyInstaller)
+    if hasattr(sys, '_MEIPASS'):
+        base_path = Path(sys._MEIPASS)
+    else:
+        base_path = Path(__file__).parent
+    weights_path = base_path / entry["weights"]
     
     # Instantiate the model architecture
     try: model = entry["class"](**entry.get("params", {}))
@@ -376,8 +381,8 @@ def save_nifti_file(data, affine, path, is_mask=False):
     return str(path)
 
 def generate_filenames(original_path):
-    script_dir = Path(__file__).parent
-    out_dir = script_dir / "Outputs"
+    # Save outputs next to the input file, not inside the frozen app temp dir
+    out_dir = Path(original_path).parent / "Outputs"
     out_dir.mkdir(exist_ok=True)
     base = Path(original_path).stem.replace(".nii", "")
     mask_path = out_dir / f"{base}_MASK.nii.gz"
