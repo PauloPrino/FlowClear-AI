@@ -8,3 +8,4 @@ venv/*
 *.zip
 build/*
 dist/*
+ThresholdImpacts/*
