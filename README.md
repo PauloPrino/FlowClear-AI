@@ -1,30 +1,47 @@
 # FlowClear AI
+
 A desktop application to detect, segement and correct velocity aliasing in 4D Flow MRI
 
 ## Overview
+
 FlowClear-AI is a standalone desktop application designed for processing 4D Flow MRI data. It provides tools for:
-*   Detecting and correcting phase aliasing (velocity wraps).
-*   Segmenting anatomical regions of interest (Aorta, Heart).
-*   Converting DICOM files to NIfTI format.
-*   Manually correcting phase wraps.
+
+* Detecting and correcting phase aliasing (velocity wraps).
+* Segmenting anatomical regions of interest (Aorta, Heart).
+* Converting DICOM files to NIfTI format.
+* Manually correcting phase wraps.
 
 It combines classical signal processing techniques with modern deep learning approaches to streamline 4D Flow analysis.
 
 ## Features
-*   **AI-Powered Unwrapping:** Utilizes 2D, 3D, and 2D+T UNET models to automatically detect and correct phase aliasing.
-*   **Ensemble Mode:** Combines multiple AI models using averaging, majority voting, or unanimous agreement for robust unwrapping.
-*   **Classical Unwrapping:** Includes Laplacian-based unwrapping algorithms.
-*   **Automatic Segmentation:** Integrates `mrsegmentator` to automatically segment the aorta and heart from magnitude MRI data.
-*   **DICOM Conversion:** Converts folders of DICOM images into NIfTI format for processing.
-*   **Manual Correction:** Interactive GUI to manually fix any remaining phase wraps.
-*   **Visualization:** Displays original, unwrapped, and segmented data.
+
+* **AI-Powered Unwrapping:** Utilizes 2D, 3D, and 2D+T UNET models to automatically detect and correct phase aliasing.
+* **Ensemble Mode:** Combines multiple AI models using averaging, majority voting, or unanimous agreement for robust unwrapping.
+* **Classical Unwrapping:** Includes Laplacian-based unwrapping algorithms.
+* **Automatic Segmentation:** Integrates `mrsegmentator` to automatically segment the aorta and heart from magnitude MRI data.
+* **DICOM Conversion:** Converts folders of DICOM images into NIfTI format for processing.
+* **Manual Correction:** Interactive GUI to manually fix any remaining phase wraps.
+* **Visualization:** Displays original, unwrapped, and segmented data.
 
 ## Usage
-1.  **Download:** Download the latest release from the [Releases](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/releases) page.
-2.  **Extract:** Unzip the downloaded folder.
-3.  **Run:** Double-click `FlowClear-AI.exe`.
+
+1. **Download:** Download the latest release from the [Releases](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/releases) page.
+2. **Extract:** Unzip the downloaded folder.
+3. **Run:** Double-click `FlowClear-AI.exe`.
 
 See the in-app help buttons for information about each parameter.
 
 ## License
+
 This project is licensed under a proprietary license. See `LICENSE.md` for details.
+
+## Relevant used work
+
+* **dcm2niix**
+  Chris Rorden. dcm2niiX version v1.0.20250505. https://github.com/rordenlab/dcm2niix?tab=readme-ov-file
+* **4D Flow Unwrap**
+  P. Dirix. 4D Flow unwrap. 2024.
+* **MRSegmentator**
+  Hartmut Häntze et Al. Segmenting Whole-Body MRI and CT for Multiorgan Anatomic Structure Delineation.  *Radiology: Artificial Intelligence* . 2025. DOI: 10.1148/ryai.240777
+* **Deep learning–based velocity antialiasing of 4D-flow MRI**
+  Berhane H, Scott MB, Barker AJ, et al. Deep learning–based velocity antialiasing of 4D-flow MRI.  *Magn Reson Med* . 2022. DOI: 10.1002/mrm.29205
