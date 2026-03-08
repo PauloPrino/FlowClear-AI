@@ -13,8 +13,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QComboBox, QMessageBox, QProgressBar, QCheckBox, 
                                QLineEdit, QFileDialog, QStackedWidget, QSpinBox, 
                                QProgressDialog, QScrollBar, QScrollArea, QGroupBox)
-from PySide6.QtCore import Qt, QThread, Signal, QLocale, QTimer, QSize
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QDoubleValidator, QCursor, QAction, QPixmap, QColor, QPainter, QFont
+from PySide6.QtCore import Qt, QThread, Signal, QLocale, QTimer, QSize, QUrl
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QDoubleValidator, QCursor, QAction, QPixmap, QColor, QPainter, QFont, QDesktopServices
 
 # Matplotlib Integration
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -1649,6 +1649,9 @@ class MainWindow(QMainWindow):
 
         # Connect Prediction Widget signal
         self.page_predict.request_manual_labeling.connect(self.load_and_switch_to_labeling)
+        
+        # Check for GPU
+        QTimer.singleShot(500, self.check_gpu_status)
 
     def switch_view(self, index, title):
         self.stacked_widget.setCurrentIndex(index)
@@ -1657,6 +1660,53 @@ class MainWindow(QMainWindow):
     def load_and_switch_to_labeling(self, orig_path, mask_path, unwrap_path):
         self.switch_view(2, "Hand Labeling")
         self.page_labeling.load_data(orig_path, mask_path, unwrap_path)
+
+    def check_gpu_status(self):
+        import subprocess
+        import platform
+        
+        # 1. If PyTorch finds CUDA ready to go, silently succeed!
+        if torch.cuda.is_available():
+            print("GPU is active and ready.")
+            return
+
+        # 2. Check if the computer actually HAS physical NVIDIA hardware
+        has_nvidia = False
+        try:
+            os_name = platform.system()
+            if os_name == "Windows":
+                # Ask Windows for the names of installed video controllers
+                output = subprocess.check_output('wmic path win32_VideoController get name', shell=True, text=True)
+                if "NVIDIA" in output.upper():
+                    has_nvidia = True
+            elif os_name == "Linux":
+                # Ask Linux to list PCI devices
+                output = subprocess.check_output('lspci', shell=True, text=True)
+                if "NVIDIA" in output.upper():
+                    has_nvidia = True
+        except Exception as e:
+            print(f"Could not check hardware: {e}")
+
+        # 3. If they don't have an NVIDIA GPU, do not nag them! Just run on CPU.
+        if not has_nvidia:
+            print("No NVIDIA GPU detected physically. Running in standard CPU mode.")
+            return
+
+        # 4. If they DO have an NVIDIA GPU, but PyTorch can't use it, show the prompt.
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setWindowTitle("GPU Acceleration Missing")
+        msg_box.setText(
+            "An NVIDIA GPU was detected, but FlowClear-AI is running in CPU mode (which is very slow).\n\n"
+            "To enable maximum speed, please ensure you have the free NVIDIA CUDA Toolkit installed on your operating system."
+        )
+        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Help)
+        msg_box.button(QMessageBox.Help).setText("Download CUDA")
+        
+        response = msg_box.exec()
+        
+        if response == QMessageBox.Help:
+            QDesktopServices.openUrl(QUrl("https://developer.nvidia.com/cuda-downloads"))
 
     def closeEvent(self, event):
         # Stop prediction worker
