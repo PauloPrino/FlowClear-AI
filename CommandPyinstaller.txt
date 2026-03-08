@@ -1,0 +1,9 @@
+Be careful, these commands need to be done in the virtual environment corresponding to the OS
+
+Windows (to be done on a Windows OS in the VENV):
+
+pyinstaller --onefile main.py --name FlowClear-AI-Windows --add-data "Weights;Weights" --add-data "ModelArchitectures;ModelArchitectures" --add-binary "dcm2niix.exe;." --add-binary "pigz.exe;."
+
+Linux (to be done on a Linuw OS / WSL in the VENV):
+
+pyinstaller --onefile main.py --name FlowClear-AI-Linux --add-data "Weights:Weights" --add-data "ModelArchitectures:ModelArchitectures" --add-binary "dcm2niix:." --add-binary "pigz:."

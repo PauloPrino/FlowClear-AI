@@ -9,3 +9,8 @@ venv/*
 build/*
 dist/*
 ThresholdImpacts/*
+flow_clear_ai_2204_venv/*
+dcm2niix
+dcm2niix_mac
+pigz
+pigz.exe

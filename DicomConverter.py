@@ -4,6 +4,7 @@ import pydicom
 import os
 import shutil
 import sys
+import platform
 
 class DicomConverter:
     def __init__(self):
@@ -15,23 +16,25 @@ class DicomConverter:
         """
         os.makedirs(output_folder, exist_ok=True)
         
-        # Check for dcm2niix
-        # Check for dcm2niix in PATH or current directory (for portable app)
-        dcm2niix_cmd = "dcm2niix"
+        # Determine the correct filename based on the OS
+        is_windows = platform.system() == "Windows"
+        exe_name = "dcm2niix.exe" if is_windows else "dcm2niix"
+        
+        dcm2niix_cmd = exe_name
         
         # Priority 1: Check if bundled with PyInstaller
         if hasattr(sys, '_MEIPASS'):
-            bundled_exe = os.path.join(sys._MEIPASS, "dcm2niix.exe")
+            bundled_exe = os.path.join(sys._MEIPASS, exe_name)
             if os.path.exists(bundled_exe):
                 dcm2niix_cmd = bundled_exe
         
         # Priority 2: Check local directory (useful for development/portable)
-        elif os.path.exists(os.path.join(os.getcwd(), "dcm2niix.exe")):
-            dcm2niix_cmd = os.path.join(os.getcwd(), "dcm2niix.exe")
+        elif os.path.exists(os.path.join(os.getcwd(), exe_name)):
+            dcm2niix_cmd = os.path.join(os.getcwd(), exe_name)
             
         # Priority 3: Check System PATH
         elif shutil.which("dcm2niix") is None:
-            print("Error: dcm2niix not found in PATH, local folder, or bundle.")
+            print(f"Error: {exe_name} not found in PATH, local folder, or bundle.")
             return False
 
         # Output filename pattern
